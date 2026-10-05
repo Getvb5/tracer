@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Monitoramento Tracer</title>
+    <script>
+      // Filter benign micro-second clock skew warnings from Firebase Firestore
+      (function() {
+        var isFutureSkew = function(args) {
+          for (var i = 0; i < args.length; i++) {
+            if (typeof args[i] === 'string' && args[i].indexOf('Detected an update time that is in the future') !== -1) {
+              return true;
+            }
+          }
+          return false;
+        };
+        var wrap = function(fn) {
+          return function() {
+            if (!isFutureSkew(arguments)) {
+              fn.apply(console, arguments);
+            }
+          };
+        };
+        console.warn = wrap(console.warn);
+        console.error = wrap(console.error);
+        console.log = wrap(console.log);
+        console.info = wrap(console.info);
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+

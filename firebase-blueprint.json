@@ -1,0 +1,120 @@
+{
+  "entities": {
+    "audit_hand_hygiene": {
+      "title": "Auditoria de Higienização das Mãos",
+      "description": "Registro de observação de adesão à higiene das mãos.",
+      "type": "object",
+      "properties": {
+        "unitId": { "type": "string", "description": "ID da Unidade de Saúde" },
+        "auditorId": { "type": "string", "description": "ID do auditor" },
+        "professionalCategory": { "type": "string", "enum": ["Médico", "Enfermeiro", "Técnico", "Outro"] },
+        "moment": { "type": "string", "enum": ["Antes do contato", "Antes do procedimento", "Após risco de fluídos", "Após contato com paciente", "Após contato com entorno"] },
+        "compliant": { "type": "boolean", "description": "Se a conformidade foi atingida" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["unitId", "auditorId", "professionalCategory", "moment", "compliant", "timestamp"]
+    },
+    "audit_patient_id": {
+      "title": "Auditoria de Identificação do Paciente",
+      "description": "Verificação de conformidade na identificação do paciente.",
+      "type": "object",
+      "properties": {
+        "unitId": { "type": "string" },
+        "auditorId": { "type": "string" },
+        "hasWristband": { "type": "boolean" },
+        "wristbandLegible": { "type": "boolean" },
+        "correctData": { "type": "boolean" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["unitId", "auditorId", "hasWristband", "wristbandLegible", "correctData", "timestamp"]
+    },
+    "audit_safe_surgery": {
+      "title": "Auditoria de Cirurgia Segura",
+      "description": "Checklist de cirurgia segura em sala.",
+      "type": "object",
+      "properties": {
+        "unitId": { "type": "string" },
+        "auditorId": { "type": "string" },
+        "signIIn": { "type": "boolean", "description": "Antes da indução anestésica" },
+        "timeOut": { "type": "boolean", "description": "Antes da incisão cirúrgica" },
+        "signOut": { "type": "boolean", "description": "Antes do paciente sair da sala" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["unitId", "auditorId", "signIIn", "timeOut", "signOut", "timestamp"]
+    },
+    "health_units": {
+      "title": "Unidade de Saúde",
+      "description": "Hospitais e clínicas da rede Recife.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "type": { "type": "string", "enum": ["Hospital", "UPA", "Policlínica"] },
+        "district": { "type": "string" }
+      },
+      "required": ["name", "type"]
+    },
+    "auditor": {
+      "title": "Perfil do Auditor",
+      "description": "Informações de identificação do auditor de campo.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "professionalCategory": { "type": "string", "enum": ["Médico", "Enfermeiro", "Técnico", "Outro"] },
+        "registrationNumber": { "type": "string" },
+        "defaultUnitId": { "type": "string" },
+        "email": { "type": "string" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "professionalCategory", "registrationNumber", "defaultUnitId", "email"]
+    },
+    "test_connection": {
+      "title": "Teste de Conexão",
+      "description": "Documento usado para verificar conectividade do Firestore.",
+      "type": "object",
+      "properties": {
+        "status": { "type": "string" }
+      }
+    },
+    "system_config": {
+      "title": "Configuração do Sistema",
+      "description": "Configurações gerais do sistema, incluindo URLs de webhook das planilhas Google Sheets.",
+      "type": "object",
+      "properties": {
+        "tracer_01": { "type": "string" },
+        "tracer_02": { "type": "string" },
+        "tracer_03": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      }
+    }
+  },
+  "firestore": {
+    "/audits_hand_hygiene/{id}": {
+      "schema": "audit_hand_hygiene",
+      "description": "Coleção de auditorias de higienização das mãos"
+    },
+    "/audits_patient_id/{id}": {
+      "schema": "audit_patient_id",
+      "description": "Coleção de auditorias de identificação de paciente"
+    },
+    "/audits_safe_surgery/{id}": {
+      "schema": "audit_safe_surgery",
+      "description": "Coleção de auditorias de cirurgia segura"
+    },
+    "/units/{id}": {
+      "schema": "health_units",
+      "description": "Unidades de saúde monitoradas"
+    },
+    "/auditors/{id}": {
+      "schema": "auditor",
+      "description": "Coleção de informações de auditores"
+    },
+    "/test/{id}": {
+      "schema": "test_connection",
+      "description": "Caminho de teste de conectividade do Firestore"
+    },
+    "/system_config/{id}": {
+      "schema": "system_config",
+      "description": "Configurações de integração e webhooks"
+    }
+  }
+}
