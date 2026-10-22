@@ -1097,17 +1097,20 @@ export default function Dashboard({
       }
       const periodLabel = globalMonth !== '' ? MONTH_NAMES[parseInt(globalMonth)] : (globalQuarter ? `${globalQuarter}º_Trimestre` : 'Geral');
       exportDashboardIndicatorsToCSV(
-        goalTrackingData.map(u => ({
-          unitId: u.unitId,
-          unitName: u.name,
-          target: u.targetTotal,
-          completed: u.totalCount,
-          coveragePct: u.progressPct,
-          compliancePct: u.progressPct,
-          t01Count: u.t01Count,
-          t02Count: u.t02Count,
-          t03Count: u.t03Count
-        })),
+        goalTrackingData.map(u => {
+          const comp = unitsComplianceData.find(uc => uc.id === u.unitId)?.compliance ?? 0;
+          return {
+            unitId: u.unitId,
+            unitName: u.name,
+            target: u.targetTotal,
+            completed: u.totalCount,
+            coveragePct: u.progressPct,
+            compliancePct: comp,
+            t01Count: u.t01Count,
+            t02Count: u.t02Count,
+            t03Count: u.t03Count
+          };
+        }),
         periodLabel
       );
     } catch (err: any) {
