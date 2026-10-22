@@ -20,7 +20,8 @@ import {
   User as UserIcon, ChevronDown, Menu, X, SlidersHorizontal,
   FolderLock, RefreshCw, UserCheck, ClipboardCheck, Layers,
   Users, Filter, ChevronRight, CheckCircle2, Sparkles, BookOpen,
-  AlertCircle, ExternalLink, Loader2, FileSpreadsheet, ShieldAlert
+  AlertCircle, ExternalLink, Loader2, FileSpreadsheet, ShieldAlert,
+  Copy, Check
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import Dashboard from './components/Dashboard';
@@ -48,6 +49,8 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
+  const [unauthorizedDomain, setUnauthorizedDomain] = useState<string | null>(null);
+  const [copiedDomain, setCopiedDomain] = useState(false);
   const [view, setView] = useState<View>('dashboard');
   const [autoSyncState, setAutoSyncState] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle');
   const [isQuotaExceeded, setIsQuotaExceeded] = useState(false);
@@ -77,7 +80,8 @@ export default function App() {
       console.error("[Login] Erro ao autenticar:", err);
       let errorMsg = 'Não foi possível autenticar com o Google. Por favor, tente novamente.';
       if (err?.code === 'auth/unauthorized-domain') {
-        const currentDomain = typeof window !== 'undefined' ? window.location.hostname : '';
+        const currentDomain = (typeof window !== 'undefined' && window.location.hostname) ? window.location.hostname : 'tracer-kohl.vercel.app';
+        setUnauthorizedDomain(currentDomain);
         errorMsg = `O domínio "${currentDomain}" não está autorizado no Firebase Authentication. Para liberar o login, adicione "${currentDomain}" na lista de Domínios Autorizados no console do Firebase (Authentication > Settings > Authorized domains).`;
       } else if (err?.code === 'auth/popup-blocked') {
         errorMsg = 'O navegador bloqueou a janela pop-up de login do Google. Por favor, permita pop-ups para este site ou abra o painel diretamente em uma nova aba.';
@@ -106,8 +110,9 @@ export default function App() {
       console.error("[Login Redirect] Erro ao redirecionar:", err);
       let errorMsg = 'Não foi possível autenticar via redirecionamento. Por favor, tente novamente.';
       if (err?.code === 'auth/unauthorized-domain') {
-        const currentDomain = typeof window !== 'undefined' ? window.location.hostname : '';
-        errorMsg = `O domínio "${currentDomain}" não está autorizado no Firebase Authentication.`;
+        const currentDomain = (typeof window !== 'undefined' && window.location.hostname) ? window.location.hostname : 'tracer-kohl.vercel.app';
+        setUnauthorizedDomain(currentDomain);
+        errorMsg = `O domínio "${currentDomain}" não está autorizado no Firebase Authentication. Para liberar o login, adicione-o na lista de Domínios Autorizados no console do Firebase.`;
       } else if (err?.message) {
         errorMsg = err.message;
       }
@@ -664,6 +669,38 @@ export default function App() {
 
               {/* Action buttons to resolve popup issues */}
               <div className="flex flex-col gap-2 pt-2 border-t border-red-200/60">
+                {unauthorizedDomain && (
+                  <div className="p-3 bg-white/95 border border-red-200 rounded-xl space-y-2 mb-1 shadow-2xs">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[10px] font-black uppercase text-slate-500">Domínio da Aplicação:</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(unauthorizedDomain);
+                          setCopiedDomain(true);
+                          setTimeout(() => setCopiedDomain(false), 2000);
+                        }}
+                        className="px-2 py-0.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-[9px] font-bold uppercase transition-all flex items-center gap-1 cursor-pointer"
+                      >
+                        {copiedDomain ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
+                        <span>{copiedDomain ? 'Copiado!' : 'Copiar Domínio'}</span>
+                      </button>
+                    </div>
+                    <div className="px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-mono font-bold text-slate-800 select-all">
+                      {unauthorizedDomain}
+                    </div>
+                    <a
+                      href="https://console.firebase.google.com/project/gen-lang-client-0980017230/authentication/settings"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center justify-center gap-1.5 w-full py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[10px] font-black uppercase tracking-wider transition-all shadow-xs"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                      <span>Abrir Configurações no Firebase Console</span>
+                    </a>
+                  </div>
+                )}
+
                 <div className="flex flex-wrap items-center gap-2">
                   <button
                     type="button"

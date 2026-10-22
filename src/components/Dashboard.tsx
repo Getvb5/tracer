@@ -12,6 +12,7 @@ import { MONTH_NAMES, getTracerDateMonth, getTracerDateDay } from './AuditExplor
 import ItemComplianceStackedChart from './ItemComplianceStackedChart';
 import AuditorsParticipation from './AuditorsParticipation';
 import { exportAuditsToCSV, exportDashboardIndicatorsToCSV } from '../lib/csvExport';
+import { calculateItemsCompliance, T03_ITEMS_CONFIG } from '../lib/itemComplianceHelper';
 import {
   ResponsiveContainer,
   LineChart,
@@ -578,19 +579,33 @@ export default function Dashboard({
       if (checkVal(sOut)) t02SignOut++;
     });
 
-    let t03Total = filteredHand.length;
-    let t03Compliant = 0;
+    const t03Total = filteredHand.length;
+    let t03HandHygiene = 0;
 
     filteredHand.forEach(a => {
       const raw = a.rawData || (a.sourceRowHash ? (typeof a.sourceRowHash === 'object' ? a.sourceRowHash : (typeof a.sourceRowHash === 'string' ? (() => { try { return JSON.parse(a.sourceRowHash); } catch { return {}; } })() : {})) : {});
       const comp = a.compliant !== undefined ? a.compliant : (a.handHygiene !== undefined ? a.handHygiene : (raw['Houve higienização das mãos imediatamente antes da administração da medicação ?'] || raw['Houve higienização das mãos imediatamente antes da administração da medicação']));
 
-      if (checkVal(comp)) t03Compliant++;
+      if (checkVal(comp)) t03HandHygiene++;
     });
 
+    // Multi-item calculation for T03 across clinical items
+    const t03ItemsResult = calculateItemsCompliance(filteredHand, T03_ITEMS_CONFIG);
+    const t03Sim = t03ItemsResult.reduce((acc, curr) => acc + curr.simCount, 0);
+    const t03Nao = t03ItemsResult.reduce((acc, curr) => acc + curr.naoCount, 0);
+    const t03Evaluated = t03Sim + t03Nao;
+    const t03CompliancePct = t03Evaluated > 0 
+      ? Math.round((t03Sim / t03Evaluated) * 100) 
+      : (t03Total > 0 ? Math.round((t03HandHygiene / t03Total) * 100) : 0);
+
+    const t03PrescricaoPct = t03ItemsResult.find(r => r.id === 't03_assinatura_medico')?.simPct || 0;
+    const t03ConferenciaPct = t03ItemsResult.find(r => r.id === 't03_conferencia_prescricao')?.simPct || 0;
+    const t03HandHygienePct = t03Total > 0 ? (t03HandHygiene / t03Total) * 100 : 0;
+    const t03Compliant = t03HandHygiene;
+
     const totalAudits = t01Total + t02Total + t03Total;
-    const totalConformingPoints = t01HasWristband + t01WristbandLegible + t01CorrectData + t02SignIn + t02TimeOut + t02SignOut + t03Compliant;
-    const totalPossiblePoints = (t01Total * 3) + (t02Total * 3) + t03Total;
+    const totalConformingPoints = t01HasWristband + t01WristbandLegible + t01CorrectData + t02SignIn + t02TimeOut + t02SignOut + t03Sim;
+    const totalPossiblePoints = (t01Total * 3) + (t02Total * 3) + (t03Evaluated > 0 ? t03Evaluated : t03Total);
     const overallCompliancePct = totalPossiblePoints > 0 ? Math.min(100, Math.round((totalConformingPoints / totalPossiblePoints) * 100)) : 0;
 
     return {
@@ -604,6 +619,13 @@ export default function Dashboard({
       t02SignOut,
       t03Total,
       t03Compliant,
+      t03HandHygiene,
+      t03Sim,
+      t03Evaluated,
+      t03CompliancePct,
+      t03PrescricaoPct,
+      t03ConferenciaPct,
+      t03HandHygienePct,
       overallCompliancePct,
       totalAudits
     };
@@ -613,17 +635,19 @@ export default function Dashboard({
     const { 
       t01Total, t01HasWristband, t01WristbandLegible, t01CorrectData,
       t02Total, t02SignIn, t02TimeOut, t02SignOut,
-      t03Total, t03Compliant
+      t03Total, t03PrescricaoPct, t03ConferenciaPct, t03HandHygienePct, t03CompliancePct
     } = complianceMetrics;
 
     return [
-      { name: 'Pulseira Branca', pct: t01Total > 0 ? Math.min(100, Math.round((t01HasWristband / t01Total) * 100)) : 0, color: '#3b82f6', tracer: 'T01' },
-      { name: 'Pulseira Legível', pct: t01Total > 0 ? Math.min(100, Math.round((t01WristbandLegible / t01Total) * 100)) : 0, color: '#3b82f6', tracer: 'T01' },
-      { name: 'Dados Corretos', pct: t01Total > 0 ? Math.min(100, Math.round((t01CorrectData / t01Total) * 100)) : 0, color: '#3b82f6', tracer: 'T01' },
-      { name: 'Sign-In Anestesia', pct: t02Total > 0 ? Math.min(100, Math.round((t02SignIn / t02Total) * 100)) : 0, color: '#f59e0b', tracer: 'T02' },
-      { name: 'Time-Out Cirurgia', pct: t02Total > 0 ? Math.min(100, Math.round((t02TimeOut / t02Total) * 100)) : 0, color: '#f59e0b', tracer: 'T02' },
-      { name: 'Sign-Out Saída', pct: t02Total > 0 ? Math.min(100, Math.round((t02SignOut / t02Total) * 100)) : 0, color: '#f59e0b', tracer: 'T02' },
-      { name: 'Proc. Medicação', pct: t03Total > 0 ? Math.min(100, Math.round((t03Compliant / t03Total) * 100)) : 0, color: '#6366f1', tracer: 'T03' },
+      { name: 'Pulseira Branca (T01)', pct: t01Total > 0 ? Math.min(100, Math.round((t01HasWristband / t01Total) * 100)) : 0, color: '#3b82f6', tracer: 'T01' },
+      { name: 'Pulseira Legível (T01)', pct: t01Total > 0 ? Math.min(100, Math.round((t01WristbandLegible / t01Total) * 100)) : 0, color: '#3b82f6', tracer: 'T01' },
+      { name: 'Dados Corretos (T01)', pct: t01Total > 0 ? Math.min(100, Math.round((t01CorrectData / t01Total) * 100)) : 0, color: '#3b82f6', tracer: 'T01' },
+      { name: 'Sign-In Anestesia (T02)', pct: t02Total > 0 ? Math.min(100, Math.round((t02SignIn / t02Total) * 100)) : 0, color: '#f59e0b', tracer: 'T02' },
+      { name: 'Time-Out Cirurgia (T02)', pct: t02Total > 0 ? Math.min(100, Math.round((t02TimeOut / t02Total) * 100)) : 0, color: '#f59e0b', tracer: 'T02' },
+      { name: 'Sign-Out Saída (T02)', pct: t02Total > 0 ? Math.min(100, Math.round((t02SignOut / t02Total) * 100)) : 0, color: '#f59e0b', tracer: 'T02' },
+      { name: 'Prescrição Médica (T03)', pct: t03Total > 0 ? Math.min(100, Math.round(t03PrescricaoPct)) : 0, color: '#6366f1', tracer: 'T03' },
+      { name: 'Conferência Prescrição (T03)', pct: t03Total > 0 ? Math.min(100, Math.round(t03ConferenciaPct)) : 0, color: '#6366f1', tracer: 'T03' },
+      { name: 'Higiene Mãos Medicação (T03)', pct: t03Total > 0 ? Math.min(100, Math.round(t03HandHygienePct)) : 0, color: '#ec4899', tracer: 'T03' },
     ];
   }, [complianceMetrics]);
 
@@ -679,9 +703,14 @@ export default function Dashboard({
     filteredHand.forEach(a => {
       const uid = a.unitId || a.hospitalId || a.unidadeId;
       const raw = a.rawData || (a.sourceRowHash ? (typeof a.sourceRowHash === 'object' ? a.sourceRowHash : (typeof a.sourceRowHash === 'string' ? (() => { try { return JSON.parse(a.sourceRowHash); } catch { return {}; } })() : {})) : {});
+      let con = 0;
+      const p = raw['Prescrição com assinatura do médico ?'] || raw['Prescrição com assinatura do médico'] || raw['29- Prescrição com assinatura do médico?'];
+      if (checkVal(p)) con++;
+      const c = raw['Houve conferência do medicamento administrado com a prescrição?'] || raw['Conferência do medicamento administrado com a prescrição'] || raw['No momento da administração da medicação foi conferida a identificação do paciente com a pulseira ?'];
+      if (checkVal(c)) con++;
       const comp = a.compliant !== undefined ? a.compliant : (a.handHygiene !== undefined ? a.handHygiene : (raw['Houve higienização das mãos imediatamente antes da administração da medicação ?'] || raw['Houve higienização das mãos imediatamente antes da administração da medicação']));
-      let con = checkVal(comp) ? 1 : 0;
-      addAuditToUnit(uid, con, 1);
+      if (checkVal(comp)) con++;
+      addAuditToUnit(uid, con, 3);
     });
 
     return Object.entries(unitStats)
@@ -820,11 +849,19 @@ export default function Dashboard({
     }
 
     if (t03Total > 0) {
-      const medPct = Math.round((t03Compliant / t03Total) * 100);
-      if (medPct < 80) {
+      const medPct = complianceMetrics.t03CompliancePct;
+      const higPct = Math.round(complianceMetrics.t03HandHygienePct);
+      if (higPct < 40) {
+        insights.push({
+          type: 'warning',
+          title: 'Atenção Crítica: Higiene das Mãos em T03',
+          desc: `A conformidade geral do processo de medicação está em ${medPct}%, porém a higienização das mãos imediatamente antes da administração atingiu apenas ${higPct}%. Priorizar capacitação prática das equipes.`,
+          tracer: 'T03'
+        });
+      } else if (medPct < 80) {
         insights.push({
           type: 'danger',
-          title: 'Conformidade Crítica em Proc. de Medicação',
+          title: 'Conformidade em Proc. de Medicação',
           desc: `O índice de conformidade dos processos seguros de medicação está em ${medPct}%. Recomendada ação de reforço nos protocolos de prescrição, preparo e administração.`,
           tracer: 'T03'
         });
@@ -1079,8 +1116,8 @@ export default function Dashboard({
     }
   };
 
-  const totalConformingItems = complianceMetrics.t01HasWristband + complianceMetrics.t01WristbandLegible + complianceMetrics.t01CorrectData + complianceMetrics.t02SignIn + complianceMetrics.t02TimeOut + complianceMetrics.t02SignOut + complianceMetrics.t03Compliant;
-  const totalEvaluatedItems = (complianceMetrics.t01Total * 3) + (complianceMetrics.t02Total * 3) + complianceMetrics.t03Total;
+  const totalConformingItems = complianceMetrics.t01HasWristband + complianceMetrics.t01WristbandLegible + complianceMetrics.t01CorrectData + complianceMetrics.t02SignIn + complianceMetrics.t02TimeOut + complianceMetrics.t02SignOut + complianceMetrics.t03Sim;
+  const totalEvaluatedItems = (complianceMetrics.t01Total * 3) + (complianceMetrics.t02Total * 3) + (complianceMetrics.t03Evaluated > 0 ? complianceMetrics.t03Evaluated : complianceMetrics.t03Total);
   const itemCompliancePctFormatted = totalEvaluatedItems > 0 
     ? ((totalConformingItems / totalEvaluatedItems) * 100).toFixed(1).replace('.', ',') 
     : '0,0';
@@ -1435,23 +1472,27 @@ export default function Dashboard({
           <div className="p-3.5 bg-indigo-50/40 border border-indigo-100 rounded-xl space-y-2">
             <div className="flex items-center justify-between">
               <span className="text-[9px] font-black text-indigo-700 uppercase tracking-wider">T03 - Proc. Medicação</span>
-              <span className="text-xs font-black text-indigo-800">
-                {complianceMetrics.t03Total > 0 
-                  ? `${Math.round((complianceMetrics.t03Compliant / complianceMetrics.t03Total) * 100)}%` 
-                  : '0%'}
-              </span>
+              <div className="flex items-baseline gap-1">
+                <span className="text-xs font-black text-indigo-800">
+                  {complianceMetrics.t03Total > 0 
+                    ? `${complianceMetrics.t03CompliancePct}%` 
+                    : '0%'}
+                </span>
+                <span className="text-[8px] font-bold text-indigo-500 uppercase tracking-tight">Global</span>
+              </div>
             </div>
             <div className="w-full bg-indigo-100/60 h-1.5 rounded-full overflow-hidden">
               <div 
                 className="h-full bg-indigo-600 rounded-full transition-all duration-500" 
                 style={{ 
-                  width: `${complianceMetrics.t03Total > 0 ? (complianceMetrics.t03Compliant / complianceMetrics.t03Total) * 100 : 0}%` 
+                  width: `${complianceMetrics.t03Total > 0 ? complianceMetrics.t03CompliancePct : 0}%` 
                 }} 
               />
             </div>
             <div className="flex items-center justify-between text-[8px] font-bold text-slate-500 uppercase tracking-tight pt-0.5">
-              <span>Higienização das Mãos</span>
-              <span>{complianceMetrics.t03Compliant} de {complianceMetrics.t03Total}</span>
+              <span>Prescrição: {Math.round(complianceMetrics.t03PrescricaoPct)}%</span>
+              <span>Conferência: {Math.round(complianceMetrics.t03ConferenciaPct)}%</span>
+              <span className="text-amber-700 font-extrabold" title="Higienização imediata antes de administrar (Item crítico)">Higiene: {Math.round(complianceMetrics.t03HandHygienePct)}%</span>
             </div>
           </div>
 
